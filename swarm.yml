@@ -1,5 +1,6 @@
 ---
 - hosts: all
+  gather_facts: false
   tasks:
     - name: Install dockcer
       package:
@@ -15,39 +16,25 @@
         name: firewalld
         state: stopped
         enabled: no
-    - name: swam leave
+    - name: swarm leave
       shell: |
         docker swarm leave --force >/dev/null 2>&1 | true
-    - name: Initialize docker swarm
-      shell: docker swarm init --advertise-addr "{{ ansible_default_ipv4.address }}"
-      register: swarm_info
-    - name: get the String for worker
-      debug:
-        msg: "{{ item }}"
-      with_items: "{{ swarm_info.stdout }}"
-    - name: inline file
-      lineinfile:
-        create: yes
-        dest: /tmp/swarm.log
-        line: "{{ swarm_info.stdout }}"
-        state: present
 
 - hosts: master
-  gather_facts: false
+#  gather_facts: false
   tasks:
+    - name: Initialize docker swarm
+      shell: docker swarm init --advertise-addr "{{ ansible_default_ipv4.address }}"
     - name: get join command
       shell: docker swarm join-token manager | sed 1d | sed 1d | sed 4d | sed 's/\\//g' | tr '\n' ' '
       register: worker_join_command
-
-    - name: set join command
+    - name: run join command on workers
       set_fact:
         worker_join_command: "{{ worker_join_command.stdout_lines[0] }}"
 
-- hosts: worker
+- hosts: workers
+  gather_facts: false
   tasks:
-    - name: swam leave on worker
-      shell: |
-        docker swarm leave --force >/dev/null 2>&1 | true
     - name: join swarm cluster
       shell: "{{ hostvars['master'].worker_join_command }} > /tmp/worker_joined.txt"
 
